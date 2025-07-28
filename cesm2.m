@@ -142,13 +142,24 @@ if do_compute > 0
                 K_w_data = squeeze(K_w_m_yy_hist(nn,2:end,ff,j));  % (nk-1,)
                 K_e_data = squeeze(K_e_m_yy_hist(nn,1:end,ff,j));  % (nk,)
                 
-                % Concatenate properly - both should be row vectors
-                KK_hist = smooth([fliplr(K_w_data'), K_e_data'],3,'g');
+                % Convert to row vectors and concatenate
+                K_w_row = K_w_data(:)';  % Force to row vector
+                K_e_row = K_e_data(:)';  % Force to row vector
+                
+                % Concatenate as row vectors
+                combined_data = [fliplr(K_w_row), K_e_row];
+                KK_hist = smooth(combined_data, 3, 'g');
                 
                 % Similarly for RCP data
                 K_w_data_rcp = squeeze(K_w_m_yy_rcp(nn,2:end,ff,j));
                 K_e_data_rcp = squeeze(K_e_m_yy_rcp(nn,1:end,ff,j));
-                KK_rcp = smooth([fliplr(K_w_data_rcp'), K_e_data_rcp'],3,'g');
+                
+                % Convert to row vectors and concatenate
+                K_w_row_rcp = K_w_data_rcp(:)';
+                K_e_row_rcp = K_e_data_rcp(:)';
+                
+                combined_data_rcp = [fliplr(K_w_row_rcp), K_e_row_rcp];
+                KK_rcp = smooth(combined_data_rcp, 3, 'g');
                 
                 % Assign back to arrays
                 K_e_sm_yy_hist(nn,1:end,ff,j) = KK_hist(end-nk+1:end);
