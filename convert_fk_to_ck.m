@@ -50,4 +50,4 @@ for k=1:nk
     end
 end
 
-return
+end  % End of function

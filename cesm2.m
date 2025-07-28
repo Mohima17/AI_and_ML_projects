@@ -211,10 +211,30 @@ nk2 = length(wavenum);  nj = nlat_eff;
 kk = 1:nk2; jj=1:nj;
 c_max=50;  c_min = -10;   ca=0.0:0.1:c_max;   cc=1:length(ca);
 
+% Check if convert_fk_to_ck function exists
+if exist('convert_fk_to_ck', 'file') ~= 2
+    error('convert_fk_to_ck function not found. Make sure convert_fk_to_ck.m is in your MATLAB path.');
+end
+
 for pos=1:nj
-    [K_e_new, K_w_new] = convert_fk_to_ck(freq, wavenum(kk), cos(lat(pos)/180.*pi), ca, squeeze(K_e(:, :, pos)), squeeze(K_w(:, :, pos)));
-    K_e_lat_hist(:,pos)=sum(K_e_new,2);
-    K_w_lat_hist(:,pos)=sum(K_w_new,2);
+    % Debug: Check input dimensions before function call
+    K_e_input = squeeze(K_e(:, :, pos));
+    K_w_input = squeeze(K_w(:, :, pos));
+    if pos == 1  % Only print debug info for first position
+        fprintf('Position %d: K_e size = [%d %d], K_w size = [%d %d]\n', ...
+            pos, size(K_e_input,1), size(K_e_input,2), size(K_w_input,1), size(K_w_input,2));
+        fprintf('freq length = %d, wavenum length = %d, ca length = %d\n', ...
+            length(freq), length(wavenum(kk)), length(ca));
+    end
+    
+    try
+        [K_e_new, K_w_new] = convert_fk_to_ck(freq, wavenum(kk), cos(lat(pos)/180.*pi), ca, K_e_input, K_w_input);
+        K_e_lat_hist(:,pos)=sum(K_e_new,2);
+        K_w_lat_hist(:,pos)=sum(K_w_new,2);
+    catch ME
+        fprintf('Error at position %d: %s\n', pos, ME.message);
+        rethrow(ME);
+    end
 end
 
 clear K_e_sm_yy_hist K_w_sm_yy_hist uzm_hist
