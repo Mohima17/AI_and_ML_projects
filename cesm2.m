@@ -137,35 +137,52 @@ if do_compute > 0
     K_e_m_yy_rcp(:,1,:,:)  = 0;   K_w_m_yy_rcp(:,1,:,:)  = 0;
     for nn=1:nyr
         for j=1:nlat_eff
-            for ff=1:nf  % Need to loop over frequency dimension
-                % Extract data for this frequency and latitude
-                K_w_data = squeeze(K_w_m_yy_hist(nn,2:end,ff,j));  % (nk-1,)
-                K_e_data = squeeze(K_e_m_yy_hist(nn,1:end,ff,j));  % (nk,)
+            for ff=1:nf  % Loop over frequency dimension
+                % Extract and process historical data
+                K_w_vec = squeeze(K_w_m_yy_hist(nn,2:end,ff,j));
+                K_e_vec = squeeze(K_e_m_yy_hist(nn,1:end,ff,j));
                 
-                % Convert to row vectors and concatenate
-                K_w_row = K_w_data(:)';  % Force to row vector
-                K_e_row = K_e_data(:)';  % Force to row vector
+                % Ensure vectors are properly shaped (force to column, then transpose)
+                if size(K_w_vec,1) == 1
+                    K_w_vec = K_w_vec';
+                end
+                if size(K_e_vec,1) == 1
+                    K_e_vec = K_e_vec';
+                end
                 
-                % Concatenate as row vectors
-                combined_data = [fliplr(K_w_row), K_e_row];
-                KK_hist = smooth(combined_data, 3, 'g');
+                % Create the combined array for smoothing
+                west_flipped = fliplr(K_w_vec');
+                east_part = K_e_vec';
+                full_spectrum = [west_flipped, east_part];
                 
-                % Similarly for RCP data
-                K_w_data_rcp = squeeze(K_w_m_yy_rcp(nn,2:end,ff,j));
-                K_e_data_rcp = squeeze(K_e_m_yy_rcp(nn,1:end,ff,j));
+                % Apply smoothing
+                smoothed_hist = smooth(full_spectrum, 3, 'g');
                 
-                % Convert to row vectors and concatenate
-                K_w_row_rcp = K_w_data_rcp(:)';
-                K_e_row_rcp = K_e_data_rcp(:)';
+                % Extract and process RCP data
+                K_w_vec_rcp = squeeze(K_w_m_yy_rcp(nn,2:end,ff,j));
+                K_e_vec_rcp = squeeze(K_e_m_yy_rcp(nn,1:end,ff,j));
                 
-                combined_data_rcp = [fliplr(K_w_row_rcp), K_e_row_rcp];
-                KK_rcp = smooth(combined_data_rcp, 3, 'g');
+                % Ensure vectors are properly shaped
+                if size(K_w_vec_rcp,1) == 1
+                    K_w_vec_rcp = K_w_vec_rcp';
+                end
+                if size(K_e_vec_rcp,1) == 1
+                    K_e_vec_rcp = K_e_vec_rcp';
+                end
                 
-                % Assign back to arrays
-                K_e_sm_yy_hist(nn,1:end,ff,j) = KK_hist(end-nk+1:end);
-                K_w_sm_yy_hist(nn,2:end,ff,j) = fliplr(KK_hist(1:end-nk));
-                K_e_sm_yy_rcp(nn,1:end,ff,j) = KK_rcp(end-nk+1:end);
-                K_w_sm_yy_rcp(nn,2:end,ff,j) = fliplr(KK_rcp(1:end-nk));
+                % Create the combined array for smoothing
+                west_flipped_rcp = fliplr(K_w_vec_rcp');
+                east_part_rcp = K_e_vec_rcp';
+                full_spectrum_rcp = [west_flipped_rcp, east_part_rcp];
+                
+                % Apply smoothing
+                smoothed_rcp = smooth(full_spectrum_rcp, 3, 'g');
+                
+                % Assign back to output arrays
+                K_e_sm_yy_hist(nn,1:end,ff,j) = smoothed_hist(end-nk+1:end);
+                K_w_sm_yy_hist(nn,2:end,ff,j) = fliplr(smoothed_hist(1:end-nk));
+                K_e_sm_yy_rcp(nn,1:end,ff,j) = smoothed_rcp(end-nk+1:end);
+                K_w_sm_yy_rcp(nn,2:end,ff,j) = fliplr(smoothed_rcp(1:end-nk));
             end
         end
     end
