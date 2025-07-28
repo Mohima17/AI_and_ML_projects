@@ -27,14 +27,21 @@ lev_300hpa = 8; % Adjust this if needed based on actual pressure levels
 % Read wind components at 300 hPa level
 % Note: U and V have dimensions (time, lev, lat, lon)
 fprintf('Reading U wind component...\n');
-uu_hist = squeeze(ncread(hist_file, 'U', [1, lev_300hpa, 1, 1], [Inf, 1, Inf, Inf]));
-uu_rcp = squeeze(ncread(rcp_file, 'U', [1, lev_300hpa, 1, 1], [Inf, 1, Inf, Inf]));
+uu_hist_full = ncread(hist_file, 'U');
+uu_rcp_full = ncread(rcp_file, 'U');
 
 fprintf('Reading V wind component...\n');
-vv_hist = squeeze(ncread(hist_file, 'V', [1, lev_300hpa, 1, 1], [Inf, 1, Inf, Inf]));
-vv_rcp = squeeze(ncread(rcp_file, 'V', [1, lev_300hpa, 1, 1], [Inf, 1, Inf, Inf]));
+vv_hist_full = ncread(hist_file, 'V');
+vv_rcp_full = ncread(rcp_file, 'V');
 
-% Convert from NetCDF convention (time, lat, lon) to MATLAB convention (lon, lat, time)
+% Extract data at 300 hPa level
+% NetCDF dimensions are (time, lev, lat, lon)
+uu_hist = squeeze(uu_hist_full(:, lev_300hpa, :, :)); % (time, lat, lon)
+uu_rcp = squeeze(uu_rcp_full(:, lev_300hpa, :, :));   % (time, lat, lon)
+vv_hist = squeeze(vv_hist_full(:, lev_300hpa, :, :)); % (time, lat, lon)
+vv_rcp = squeeze(vv_rcp_full(:, lev_300hpa, :, :));   % (time, lat, lon)
+
+% Convert to MATLAB convention (lon, lat, time)
 uu_hist = permute(uu_hist, [3, 2, 1]); % (lon, lat, time)
 vv_hist = permute(vv_hist, [3, 2, 1]);
 uu_rcp = permute(uu_rcp, [3, 2, 1]);
@@ -43,6 +50,12 @@ vv_rcp = permute(vv_rcp, [3, 2, 1]);
 fprintf('Data dimensions: %d x %d x %d\n', size(uu_hist));
  
 rad = lat/180.*pi;
+
+% Get actual data dimensions for the analysis
+n_lon = size(uu_hist, 1);
+n_lat = size(uu_hist, 2);
+n_time = size(uu_hist, 3);
+fprintf('Analysis dimensions: %d lon x %d lat x %d time\n', n_lon, n_lat, n_time);
 
 % Process historical data (1961-1980, 20 years of monthly data = 240 months)
 % Assuming monthly data, we'll take DJFM months (Dec, Jan, Feb, Mar)
@@ -152,16 +165,18 @@ end
 [East_hist, West_hist]=space_time_new(u_hist,v_hist);
  
 % --------------------- momentum flux divergence ---------------------
-for ff=1:61
-for jj=1:121
+n_freq = size(East_hist, 2);
+n_lat_spec = size(East_hist, 3);
+for ff=1:n_freq
+for jj=1:n_lat_spec
 K_e_mm_cos_hist(ff,jj,:)=East_hist(:,ff,jj)*(cos(rad(jj))^2);
 K_w_mm_cos_hist(ff,jj,:)=West_hist(:,ff,jj)*(cos(rad(jj))^2);
 end
 end
 dK_e_m_hist=dy_dx(K_e_mm_cos_hist,rad,2)/RADIUS*DAY;
 dK_w_m_hist=dy_dx(K_w_mm_cos_hist,rad,2)/RADIUS*DAY;
-for ff=1:61
-for jj=1:121
+for ff=1:n_freq
+for jj=1:n_lat_spec
 K_e_m_yy_hist(yy,ff,jj,:)=-dK_e_m_hist(ff,jj,:)/(cos(rad(jj))^2);
 K_w_m_yy_hist(yy,ff,jj,:)=-dK_w_m_hist(ff,jj,:)/(cos(rad(jj))^2);
 end
@@ -187,16 +202,16 @@ end
 [East_rcp, West_rcp]=space_time_new(u_rcp,v_rcp);
  
 % --------------------- momentum flux divergence ---------------------
-for ff=1:61
-for jj=1:121
+for ff=1:n_freq
+for jj=1:n_lat_spec
 K_e_mm_cos_rcp(ff,jj,:)=East_rcp(:,ff,jj)*(cos(rad(jj))^2);
 K_w_mm_cos_rcp(ff,jj,:)=West_rcp(:,ff,jj)*(cos(rad(jj))^2);
 end
 end
 dK_e_m_rcp=dy_dx(K_e_mm_cos_rcp,rad,2)/RADIUS*DAY;
 dK_w_m_rcp=dy_dx(K_w_mm_cos_rcp,rad,2)/RADIUS*DAY;
-for ff=1:61
-for jj=1:121
+for ff=1:n_freq
+for jj=1:n_lat_spec
 K_e_m_yy_rcp(yy,ff,jj,:)=-dK_e_m_rcp(ff,jj,:)/(cos(rad(jj))^2);
 K_w_m_yy_rcp(yy,ff,jj,:)=-dK_w_m_rcp(ff,jj,:)/(cos(rad(jj))^2);
 end
@@ -217,23 +232,24 @@ K_e_m_yy_rcp(:,1,:,:)=0;
 K_w_m_yy_rcp(:,1,:,:)=0;
  
 % Smooth historical data
+n_wavenumber = size(K_e_m_yy_hist, 4);
 for nn=1:n_years_hist
-for j=1:121
-for i=1:73
-KK=smooth([fliplr(squeeze(K_w_m_yy_hist(nn,2:61,j,i))),squeeze(K_e_m_yy_hist(nn,1:61,j,i))],3,'g');
-K_e_sm_yy_hist(nn,1:61,j,i)=KK(61:121);
-K_w_sm_yy_hist(nn,2:61,j,i)=fliplr(KK(1:60)');
+for j=1:n_lat_spec
+for i=1:(n_wavenumber-1)
+KK=smooth([fliplr(squeeze(K_w_m_yy_hist(nn,2:n_freq,j,i))),squeeze(K_e_m_yy_hist(nn,1:n_freq,j,i))],3,'g');
+K_e_sm_yy_hist(nn,1:n_freq,j,i)=KK(n_freq:(2*n_freq-1));
+K_w_sm_yy_hist(nn,2:n_freq,j,i)=fliplr(KK(1:(n_freq-1))');
 end
 end
 end
 
 % Smooth RCP data
 for nn=1:n_years_rcp
-for j=1:121
-for i=1:73
-KK=smooth([fliplr(squeeze(K_w_m_yy_rcp(nn,2:61,j,i))),squeeze(K_e_m_yy_rcp(nn,1:61,j,i))],3,'g');
-K_e_sm_yy_rcp(nn,1:61,j,i)=KK(61:121);
-K_w_sm_yy_rcp(nn,2:61,j,i)=fliplr(KK(1:60)');
+for j=1:n_lat_spec
+for i=1:(n_wavenumber-1)
+KK=smooth([fliplr(squeeze(K_w_m_yy_rcp(nn,2:n_freq,j,i))),squeeze(K_e_m_yy_rcp(nn,1:n_freq,j,i))],3,'g');
+K_e_sm_yy_rcp(nn,1:n_freq,j,i)=KK(n_freq:(2*n_freq-1));
+K_w_sm_yy_rcp(nn,2:n_freq,j,i)=fliplr(KK(1:(n_freq-1))');
 end
 end
 end
@@ -262,7 +278,10 @@ uc_rcp85=squeeze(mean(uzm_rcp,1))';
 K_e_m_rcp=squeeze(mean(K_e_sm_yy_rcp,1));
 K_w_m_rcp=squeeze(mean(K_w_sm_yy_rcp,1));
  
-wavenum=[0:72]; freq=0.5*[0:(size(K_w_m_hist,1)-1)]/(size(K_w_m_hist,1)-1); mm=2:72;
+% Create wavenumber array based on actual data size
+max_wavenum = size(K_e_m_hist, 3) - 1;
+wavenum=[0:max_wavenum]; freq=0.5*[0:(size(K_w_m_hist,1)-1)]/(size(K_w_m_hist,1)-1); 
+mm=2:max_wavenum; % Skip wavenumber 0 and 1
 wavenum = wavenum(mm);
 K_e_hist = K_e_m_hist(:,:,mm);
 K_w_hist = K_w_m_hist(:,:,mm);
